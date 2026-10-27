@@ -22,6 +22,7 @@ type Record struct {
 	APIKey            string
 	Provider          string
 	Model             string
+	ResponseModel     string
 	Alias             string
 	Source            string
 	AuthID            string
@@ -45,6 +46,7 @@ type RequestDetail struct {
 	Timestamp         time.Time  `json:"timestamp"`
 	Provider          string     `json:"provider,omitempty"`
 	Model             string     `json:"model,omitempty"`
+	ResponseModel     string     `json:"response_model,omitempty"`
 	Alias             string     `json:"alias,omitempty"`
 	Source            string     `json:"source"`
 	AuthID            string     `json:"auth_id,omitempty"`

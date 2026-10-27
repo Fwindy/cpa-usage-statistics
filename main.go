@@ -26,7 +26,7 @@ const (
 
 // Overridable at build time via -ldflags "-X main.pluginVersion=...".
 var (
-	pluginVersion    = "0.1.0"
+	pluginVersion    = "0.2.0"
 	pluginAuthor     = "Fwindy"
 	pluginRepository = "https://github.com/Fwindy/cpa-usage-statistics"
 )
@@ -149,6 +149,7 @@ type usageRecord struct {
 	Provider        string       `json:"Provider"`
 	ExecutorType    string       `json:"ExecutorType"`
 	Model           string       `json:"Model"`
+	ResponseModel   string       `json:"ResponseModel"`
 	Alias           string       `json:"Alias"`
 	APIKey          string       `json:"APIKey"`
 	AuthID          string       `json:"AuthID"`
@@ -212,6 +213,7 @@ func toRecord(rec usageRecord) Record {
 		APIKey:          strings.TrimSpace(rec.APIKey),
 		Provider:        strings.TrimSpace(rec.Provider),
 		Model:           normalizeModel(rec.Model),
+		ResponseModel:   strings.TrimSpace(rec.ResponseModel),
 		Alias:           strings.TrimSpace(rec.Alias),
 		Source:          strings.TrimSpace(rec.Source),
 		AuthID:          strings.TrimSpace(rec.AuthID),

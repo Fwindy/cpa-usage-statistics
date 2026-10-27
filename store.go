@@ -67,6 +67,7 @@ func (s *SQLiteStore) initSchema(ctx context.Context) error {
 	api_key TEXT NOT NULL DEFAULT '',
 	provider TEXT NOT NULL DEFAULT '',
 	model TEXT NOT NULL DEFAULT '',
+	response_model TEXT NOT NULL DEFAULT '',
 	alias TEXT NOT NULL DEFAULT '',
 	source TEXT NOT NULL DEFAULT '',
 	auth_id TEXT NOT NULL DEFAULT '',
@@ -99,11 +100,9 @@ func (s *SQLiteStore) initSchema(ctx context.Context) error {
 	return s.migrateSchema(ctx)
 }
 
-// migrateSchema 让老版本 db 的字段自愈到最新：用 table_info 读出现有列，
-// 对最新 schema 中缺失的列逐个 ALTER TABLE ADD COLUMN 补齐（SQLite 不能重复
-// ADD，同名列跳过）。id/timestamp 是建表原始列（任何版本都有）且不可 ADD，
-// 不在补齐范围。ADD COLUMN 只带 NOT NULL DEFAULT、不带 CHECK（SQLite 对
-// ADD COLUMN 的约束限制），数值非负由写入侧 nonNegative 保证。
+// migrateSchema adds missing columns without changing existing records.
+// SQLite cannot add a column twice, so inspect the table before each upgrade.
+// Added numeric columns use defaults; writes enforce nonnegative values.
 func (s *SQLiteStore) migrateSchema(ctx context.Context) error {
 	existing, err := s.existingColumns(ctx)
 	if err != nil {
@@ -116,6 +115,7 @@ func (s *SQLiteStore) migrateSchema(ctx context.Context) error {
 		{"api_key", `ALTER TABLE usage_records ADD COLUMN api_key TEXT NOT NULL DEFAULT ''`},
 		{"provider", `ALTER TABLE usage_records ADD COLUMN provider TEXT NOT NULL DEFAULT ''`},
 		{"model", `ALTER TABLE usage_records ADD COLUMN model TEXT NOT NULL DEFAULT ''`},
+		{"response_model", `ALTER TABLE usage_records ADD COLUMN response_model TEXT NOT NULL DEFAULT ''`},
 		{"alias", `ALTER TABLE usage_records ADD COLUMN alias TEXT NOT NULL DEFAULT ''`},
 		{"source", `ALTER TABLE usage_records ADD COLUMN source TEXT NOT NULL DEFAULT ''`},
 		{"auth_id", `ALTER TABLE usage_records ADD COLUMN auth_id TEXT NOT NULL DEFAULT ''`},
@@ -148,7 +148,7 @@ func (s *SQLiteStore) migrateSchema(ctx context.Context) error {
 	return nil
 }
 
-// existingColumns 返回 usage_records 当前已有的列名集合。
+// existingColumns returns the set of column names in usage_records.
 func (s *SQLiteStore) existingColumns(ctx context.Context) (map[string]struct{}, error) {
 	rows, err := s.db.QueryContext(ctx, "PRAGMA table_info(usage_records)")
 	if err != nil {
@@ -187,17 +187,18 @@ func (s *SQLiteStore) Insert(ctx context.Context, record Record) error {
 
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO usage_records (
-	id, timestamp, api_key, provider, model, alias, source, auth_id, auth_index, auth_type, executor_type,
+	id, timestamp, api_key, provider, model, response_model, alias, source, auth_id, auth_index, auth_type, executor_type,
 	reasoning_effort, service_tier, latency_ms, ttft_ms,
 	input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens,
 	failed, failure_status_code, failure_body
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `,
 		strings.TrimSpace(record.ID),
 		formatRecordTimestamp(record.Timestamp),
 		strings.TrimSpace(record.APIKey),
 		strings.TrimSpace(record.Provider),
 		normalizeModel(record.Model),
+		strings.TrimSpace(record.ResponseModel),
 		strings.TrimSpace(record.Alias),
 		strings.TrimSpace(record.Source),
 		strings.TrimSpace(record.AuthID),
@@ -231,7 +232,7 @@ func (s *SQLiteStore) Query(ctx context.Context, rng QueryRange) (APIUsage, erro
 		return APIUsage{}, nil
 	}
 	query := `
-SELECT id, timestamp, api_key, provider, model, alias, source, auth_id, auth_index, auth_type, executor_type,
+SELECT id, timestamp, api_key, provider, model, response_model, alias, source, auth_id, auth_index, auth_type, executor_type,
        reasoning_effort, service_tier, latency_ms, ttft_ms,
        input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_read_tokens, cache_creation_tokens, total_tokens,
        failed, failure_status_code, failure_body
@@ -269,6 +270,7 @@ FROM usage_records`
 			&apiKey,
 			&detail.Provider,
 			&detail.Model,
+			&detail.ResponseModel,
 			&detail.Alias,
 			&detail.Source,
 			&detail.AuthID,

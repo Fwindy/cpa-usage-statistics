@@ -2,7 +2,7 @@
 
 CLIProxyAPI 的持久化用量统计插件。记录每次请求的用量，写入本地 SQLite；提供查询/删除接口。字段命名对齐上游 `usage.Record` / `usage.Detail`。
 
-当前版本：`0.1.0`
+当前版本：`0.2.0`
 
 ## 建议使用配套的前端面板
 
@@ -63,6 +63,7 @@ GET /v0/management/plugins/usage-statistics/usage?start=<RFC3339>&end=<RFC3339>
         "id": "…",
         "timestamp": "2026-05-02T10:30:00Z",
         "provider": "anthropic",
+        "response_model": "claude-sonnet-4-5-20250929",
         "source": "claude-code",
         "auth_index": "auth-1",
         "reasoning_effort": "high",
@@ -97,3 +98,4 @@ Content-Type: application/json
 ## 说明
 
 - 本插件仅使用上游 `UsageRecord` ABI 现有字段。失败判定为 `Failed || failure_status_code >= 400`。
+- `response_model` 记录宿主传入的 `ResponseModel`（上游响应声明的模型名），与请求模型 `model`、别名 `alias` 分开保存。旧数据库会自动补列；历史记录、旧宿主或未返回模型名的请求保持为空，查询时省略该字段。
