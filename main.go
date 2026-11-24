@@ -26,7 +26,7 @@ const (
 
 // Overridable at build time via -ldflags "-X main.pluginVersion=...".
 var (
-	pluginVersion    = "0.2.0"
+	pluginVersion    = "0.3.0"
 	pluginAuthor     = "Fwindy"
 	pluginRepository = "https://github.com/Fwindy/cpa-usage-statistics"
 )
@@ -125,7 +125,8 @@ func registerResponse() registerResponsePayload {
 }
 
 type managementRegistrationPayload struct {
-	Routes []managementRoute `json:"routes"`
+	Routes    []managementRoute `json:"routes"`
+	Resources []resourceRoute   `json:"resources"`
 }
 
 type managementRoute struct {
@@ -140,6 +141,7 @@ func managementRegistration() managementRegistrationPayload {
 			{Method: "GET", Path: managementUsagePath, Description: "Query persisted usage grouped by api key and model."},
 			{Method: "DELETE", Path: managementUsagePath, Description: "Delete persisted usage records by id."},
 		},
+		Resources: pageResources(),
 	}
 }
 
@@ -272,6 +274,9 @@ func handleManagement(request []byte) ([]byte, error) {
 		if err := json.Unmarshal(request, &req); err != nil {
 			return nil, err
 		}
+	}
+	if strings.HasPrefix(req.Path, pluginResourcePrefix) {
+		return okEnvelope(servePage(req))
 	}
 	switch strings.ToUpper(strings.TrimSpace(req.Method)) {
 	case "GET":

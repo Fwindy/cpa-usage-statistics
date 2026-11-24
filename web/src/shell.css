@@ -1,0 +1,26 @@
+.plugin-center {
+  width: 100%;
+  padding: 16px clamp(12px, 2vw, 28px) 32px;
+}
+
+.plugin-connect {
+  display: grid;
+  min-height: 70vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.plugin-connect form {
+  display: grid;
+  gap: 20px;
+  width: min(100%, 420px);
+}
+
+.plugin-connect h1 {
+  font-size: 24px;
+}
+
+.plugin-connect [role='alert'],
+.plugin-config-error {
+  color: var(--danger-color);
+}

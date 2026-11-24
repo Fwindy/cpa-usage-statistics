@@ -1,5 +1,6 @@
 # Build output
 dist/
+node_modules/
 *.so
 *.dll
 *.dylib

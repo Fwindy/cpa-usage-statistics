@@ -5,6 +5,11 @@ set -euo pipefail
 # c-shared requires CGO_ENABLED=1 and a C toolchain (gcc / mingw-w64).
 # The SQLite driver itself is pure Go (modernc.org/sqlite).
 
+if [[ ! -s web/dist/index.html ]]; then
+  echo 'Build the embedded pages first: cd web && bun install --frozen-lockfile && bun run build' >&2
+  exit 1
+fi
+
 ext="so"
 case "$(go env GOOS)" in
   windows) ext="dll" ;;
