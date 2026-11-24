@@ -42,9 +42,14 @@ func TestEmbeddedPages(t *testing.T) {
 			if !response.OK || response.Result.StatusCode != http.StatusOK {
 				t.Fatalf("resource ABI returned HTTP %d", response.Result.StatusCode)
 			}
-			if !bytes.Contains(response.Result.Body, []byte(tc.marker)) ||
-				!bytes.Contains(response.Result.Body, []byte("<script type=\"module\"")) {
-				t.Fatalf("resource response is missing its page marker or embedded app")
+			body := response.Result.Body
+			appStart := bytes.Index(body, []byte(`<script type="module"`))
+			if !bytes.Contains(body, []byte(tc.marker)) || appStart < 0 {
+				t.Fatal("resource response is missing its page marker or embedded app")
+			}
+			if !bytes.Contains(body[:appStart], []byte(`name="color-scheme"`)) ||
+				!bytes.Contains(body[:appStart], []byte("--bg-secondary")) {
+				t.Fatal("initial page colors must be set before the app bundle")
 			}
 			if got := response.Result.Headers["Content-Type"]; len(got) != 1 || got[0] != "text/html; charset=utf-8" {
 				t.Fatalf("unexpected resource content type: %v", got)

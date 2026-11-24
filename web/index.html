@@ -3,6 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Match an explicit panel theme before loading the application bundle.
+      try {
+        if (window.parent !== window) {
+          const { dataset } = window.parent.document.documentElement;
+          const theme =
+            dataset.themeMode || dataset.theme || window.parent.getComputedStyle(window.frameElement).colorScheme;
+          if (theme === 'dark' || theme === 'light' || theme === 'white') {
+            document.documentElement.dataset.theme = theme;
+          }
+        }
+      } catch {
+        // Cross-origin frames use the preferred color scheme.
+      }
+    </script>
+    <style>
+      :root {
+        --bg-secondary: #faf9f5;
+        background-color: var(--bg-secondary);
+      }
+      :root[data-theme='light'],
+      :root[data-theme='white'] {
+        color-scheme: light;
+      }
+      :root[data-theme='white'] {
+        --bg-secondary: #ffffff;
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --bg-secondary: #151412;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme]) {
+          --bg-secondary: #151412;
+        }
+      }
+    </style>
     <link rel="icon" href="data:," />
     <title>Usage Statistics</title>
   </head>

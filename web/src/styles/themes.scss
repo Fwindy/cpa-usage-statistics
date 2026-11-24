@@ -2,10 +2,10 @@
  * 主题样式
  */
 
+// The initial page background is set in index.html.
 // 浅色主题（默认）
 :root {
   // 极简暖灰：浅色模式
-  --bg-secondary: #faf9f5; // 页面背景（纸感）
   --bg-primary: #f0eee8; // 容器/卡片背景
   --bg-tertiary: #e9e6df; // hover/次级背景
   --bg-hover: var(--bg-tertiary);
@@ -94,7 +94,6 @@
 
 // 纯白主题
 [data-theme='white'] {
-  --bg-secondary: #ffffff;
   --bg-primary: #ffffff;
   --bg-tertiary: #f6f6f6;
   --bg-hover: var(--bg-tertiary);
@@ -165,7 +164,6 @@
 // 深色主题（#191919）
 [data-theme='dark'] {
   // 极简暖灰：深色模式（提升对比度与层级）
-  --bg-secondary: #151412; // 页面背景
   --bg-primary: #1d1b18; // 容器/卡片背景
   --bg-tertiary: #262320; // hover/次级背景
   --bg-hover: #2e2a26;

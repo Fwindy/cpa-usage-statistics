@@ -17,6 +17,10 @@ export function followPanelTheme() {
 
   const sync = () => {
     let theme = parent?.dataset.themeMode || parent?.dataset.theme;
+    if (!theme && parent && window.frameElement) {
+      const scheme = window.parent.getComputedStyle(window.frameElement).colorScheme;
+      if (scheme === 'light' || scheme === 'dark') theme = scheme;
+    }
     if (!theme && !parent) {
       try {
         theme = obfuscatedStorage.getItem<{ state: { theme: string } }>(STORAGE_KEY_THEME)?.state?.theme;

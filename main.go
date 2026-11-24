@@ -26,7 +26,7 @@ const (
 
 // Overridable at build time via -ldflags "-X main.pluginVersion=...".
 var (
-	pluginVersion    = "0.3.1"
+	pluginVersion    = "0.3.2"
 	pluginAuthor     = "Fwindy"
 	pluginRepository = "https://github.com/Fwindy/cpa-usage-statistics"
 )
