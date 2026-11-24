@@ -2,7 +2,7 @@
 
 CLIProxyAPI 的持久化用量统计插件。记录每次请求的用量，写入本地 SQLite；提供查询/删除接口。字段命名对齐上游 `usage.Record` / `usage.Detail`。
 
-当前版本 `0.3.0`，适用于 CLIProxyAPI v8。
+当前版本 `0.3.1`，适用于 CLIProxyAPI v8。
 
 在支持插件页面的管理面板侧栏打开「监控中心」或「凭证中心」。如果页面提示登录，输入当前 CPA 的管理密钥。
 

@@ -19,6 +19,8 @@ import './shell.css';
 
 const isCredentialPage = document.documentElement.dataset.center === 'credentials';
 
+type ConnectionState = 'restoring' | 'required' | 'submitting' | 'ready';
+
 async function checkConnection(managementKey: string) {
   apiClient.setConfig({ apiBase, managementKey });
   await apiClient.get('/server/server-id');
@@ -31,9 +33,10 @@ function PluginPage() {
   const title = t(isCredentialPage ? 'credential_center.title' : 'monitoring_center.title');
   const configError = useConfigStore((state) => state.error);
   const [key, setKey] = useState('');
-  const [pending, setPending] = useState(true);
-  const [ready, setReady] = useState(false);
+  const [connection, setConnection] = useState<ConnectionState>('restoring');
   const [error, setError] = useState('');
+  const ready = connection === 'ready';
+  const submitting = connection === 'submitting';
 
   useEffect(() => {
     document.title = title;
@@ -43,13 +46,15 @@ function PluginPage() {
   useEffect(() => {
     const saved = getSessionKey();
     if (!saved && !usesPanelSession) {
-      setPending(false);
+      setConnection('required');
       return;
     }
     void checkConnection(saved)
-      .then(() => setReady(true))
-      .catch(() => saveSessionKey(''))
-      .finally(() => setPending(false));
+      .then(() => setConnection('ready'))
+      .catch(() => {
+        saveSessionKey('');
+        setConnection('required');
+      });
   }, []);
 
   useEffect(() => {
@@ -65,23 +70,26 @@ function PluginPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = key.trim();
-    if (!trimmed || pending) return;
-    setPending(true);
+    if (!trimmed || connection !== 'required') return;
+    setConnection('submitting');
     setError('');
     try {
       await checkConnection(trimmed);
       saveSessionKey(trimmed);
       setKey('');
-      setReady(true);
+      setConnection('ready');
     } catch (err) {
       const status = (err as { status?: number }).status;
       const errorKey =
         status === 401 ? 'login.error_unauthorized' :
         status === 403 ? 'login.error_forbidden' : 'login.error_invalid';
       setError(t(errorKey));
-    } finally {
-      setPending(false);
+      setConnection('required');
     }
+  }
+
+  if (connection === 'restoring') {
+    return <main className="plugin-center" aria-busy="true" aria-label={t('login.submitting')} />;
   }
 
   if (ready) {
@@ -107,12 +115,12 @@ function PluginPage() {
           placeholder={t('login.management_key_placeholder')}
           value={key}
           onChange={(event) => setKey(event.currentTarget.value)}
-          disabled={pending}
+          disabled={submitting}
           required
         />
         {error && <p role="alert">{error}</p>}
-        <Button type="submit" disabled={!key.trim() || pending}>
-          {pending ? <LoadingSpinner size={16} /> : t('login.submit_button')}
+        <Button type="submit" disabled={!key.trim() || submitting}>
+          {submitting ? <LoadingSpinner size={16} /> : t('login.submit_button')}
         </Button>
       </form>
     </main>
