@@ -83,6 +83,7 @@ export function MonitoringCenterPage() {
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const isDark = resolvedTheme === 'dark';
   const config = useConfigStore((state) => state.config);
+  const configuredCredentials = useConfigStore((state) => state.credentials);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
   const [timeRange, setTimeRange] = useState<UsageTimeRange>(loadTimeRange);
   const [usageStatsDimension, setUsageStatsDimension] = useState<'model' | 'apiKey'>('model');
@@ -287,6 +288,7 @@ export function MonitoringCenterPage() {
           vertexConfigs={config?.vertexApiKeys || []}
           openaiProviders={config?.openaiCompatibility || []}
           authFiles={authFiles}
+          configuredCredentials={configuredCredentials}
           fixedHeight
           onRefresh={handleRefresh}
           lastRefreshedAt={lastRefreshedAt}

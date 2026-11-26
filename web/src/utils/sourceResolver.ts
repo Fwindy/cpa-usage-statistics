@@ -1,6 +1,8 @@
 import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
-import type { CredentialInfo, SourceInfo } from '@/types/sourceInfo';
-import { buildCandidateUsageSourceIds, normalizeAuthIndex } from '@/utils/usage';
+import type { ConfiguredCredential } from '@/services/api/configuredCredentials';
+import type { SourceInfo } from '@/types/sourceInfo';
+import { resolveCredentialMatch, type AuthFileLookup } from '@/utils/credentialUsage';
+import { buildCandidateUsageSourceIds, type UsageDetail } from '@/utils/usage';
 
 export interface SourceInfoMapInput {
   geminiApiKeys?: GeminiKeyConfig[];
@@ -10,19 +12,14 @@ export interface SourceInfoMapInput {
   openaiCompatibility?: OpenAIProviderConfig[];
 }
 
-type SourceInfoEntry = Required<Pick<SourceInfo, 'displayName' | 'type' | 'identityKey'>>;
-
-export interface SourceInfoMap {
-  byAuthIndex: Map<string, SourceInfoEntry | null>;
-  bySource: Map<string, SourceInfoEntry | null>;
-}
+export type SourceInfoMap = ReadonlyMap<string, SourceInfo | null>;
 
 const buildProviderIdentityKey = (type: string, index: number) => `${type}:${index}`;
 
 const registerIdentity = (
-  map: Map<string, SourceInfoEntry | null>,
-  key: string | null | undefined,
-  entry: SourceInfoEntry
+  map: Map<string, SourceInfo | null>,
+  key: string,
+  entry: SourceInfo
 ) => {
   if (!key) return;
 
@@ -49,25 +46,16 @@ const formatRawSourceDisplayName = (source: string) => {
 };
 
 export function buildSourceInfoMap(input: SourceInfoMapInput): SourceInfoMap {
-  const byAuthIndex = new Map<string, SourceInfoEntry | null>();
-  const bySource = new Map<string, SourceInfoEntry | null>();
+  const bySource = new Map<string, SourceInfo | null>();
 
-  const registerProvider = (
-    entry: SourceInfoEntry,
-    authIndices: Array<unknown>,
-    candidates: Iterable<string>
-  ) => {
-    authIndices.forEach((authIndex) => {
-      registerIdentity(byAuthIndex, normalizeAuthIndex(authIndex), entry);
-    });
-
-    Array.from(candidates).forEach((candidate) => {
+  const registerProvider = (entry: SourceInfo, candidates: Iterable<string>) => {
+    for (const candidate of candidates) {
       registerIdentity(bySource, candidate, entry);
-    });
+    }
   };
 
   const providers: Array<{
-    items: Array<{ apiKey?: string; prefix?: string; authIndex?: string }>;
+    items: Array<{ apiKey?: string; prefix?: string }>;
     type: string;
     label: string;
   }> = [
@@ -85,7 +73,6 @@ export function buildSourceInfoMap(input: SourceInfoMapInput): SourceInfoMap {
           type,
           identityKey: buildProviderIdentityKey(type, index),
         },
-        [item.authIndex],
         buildCandidateUsageSourceIds({ apiKey: item.apiKey, prefix: item.prefix })
       );
     });
@@ -93,11 +80,8 @@ export function buildSourceInfoMap(input: SourceInfoMapInput): SourceInfoMap {
 
   (input.openaiCompatibility || []).forEach((provider, providerIndex) => {
     const candidates = new Set<string>();
-    const authIndices: Array<unknown> = [provider.authIndex];
-
     buildCandidateUsageSourceIds({ prefix: provider.prefix }).forEach((id) => candidates.add(id));
     (provider.apiKeyEntries || []).forEach((entry) => {
-      authIndices.push(entry.authIndex);
       buildCandidateUsageSourceIds({ apiKey: entry.apiKey }).forEach((id) => candidates.add(id));
     });
 
@@ -107,63 +91,32 @@ export function buildSourceInfoMap(input: SourceInfoMapInput): SourceInfoMap {
         type: 'openai',
         identityKey: buildProviderIdentityKey('openai', providerIndex),
       },
-      authIndices,
       candidates
     );
   });
 
-  return { byAuthIndex, bySource };
+  return bySource;
 }
 
 export function resolveSourceDisplay(
-  sourceRaw: string,
-  authIndex: unknown,
+  detail: UsageDetail,
   sourceInfoMap: SourceInfoMap,
-  authFileMap: Map<string, CredentialInfo>
+  authFileLookup: AuthFileLookup,
+  configuredCredentials: ReadonlyMap<string, ConfiguredCredential>
 ): SourceInfo {
-  const source = sourceRaw.trim();
-  const authIndexKey = normalizeAuthIndex(authIndex);
-
-  if (authIndexKey) {
-    const matchedByAuthIndex = sourceInfoMap.byAuthIndex.get(authIndexKey);
-    if (matchedByAuthIndex) {
-      return matchedByAuthIndex;
-    }
-
-    const authInfo = authFileMap.get(authIndexKey);
-    if (authInfo) {
-      return {
-        displayName: authInfo.name || authIndexKey,
-        type: authInfo.type,
-        identityKey: `auth:${authIndexKey}`,
-      };
-    }
-  }
-
-  const matchedBySource = source ? sourceInfoMap.bySource.get(source) : null;
-  if (matchedBySource) {
-    return matchedBySource;
-  }
-
-  if (source) {
+  const credential = resolveCredentialMatch(detail, authFileLookup, configuredCredentials);
+  if (credential) {
     return {
-      displayName: formatRawSourceDisplayName(source),
-      type: '',
-      identityKey: `source:${source}`,
+      displayName: credential.displayName,
+      type: credential.type,
+      identityKey: credential.authIndex ? `auth:${credential.authIndex}` : credential.rowKey,
     };
   }
 
-  if (authIndexKey) {
-    return {
-      displayName: authIndexKey,
-      type: '',
-      identityKey: `auth:${authIndexKey}`,
-    };
-  }
-
-  return {
-    displayName: '-',
+  const source = String(detail.source ?? '').trim();
+  return sourceInfoMap.get(source) ?? {
+    displayName: formatRawSourceDisplayName(source),
     type: '',
-    identityKey: 'source:-',
+    identityKey: `source:${source || '-'}`,
   };
 }

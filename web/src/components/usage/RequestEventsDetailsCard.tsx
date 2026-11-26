@@ -17,15 +17,15 @@ import {
   REQUEST_EVENT_COLUMNS_STORAGE_KEY,
   type RequestEventColumnId,
 } from './requestEventColumns';
-import { getAuthFileStatusMessage } from '@/features/authFiles/constants';
 import { useInterval } from '@/hooks/useInterval';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { authFilesApi } from '@/services/api/authFiles';
+import type { ConfiguredCredential } from '@/services/api/configuredCredentials';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import { useUsageStatsStore } from '@/stores/useUsageStatsStore';
 import type { GeminiKeyConfig, ProviderKeyConfig, OpenAIProviderConfig } from '@/types';
 import type { AuthFileItem } from '@/types/authFile';
-import type { CredentialInfo } from '@/types/sourceInfo';
+import { buildAuthFileLookup } from '@/utils/credentialUsage';
 import { buildSourceInfoMap, resolveSourceDisplay } from '@/utils/sourceResolver';
 import { parseTimestampMs } from '@/utils/timestamp';
 import {
@@ -58,7 +58,7 @@ type RequestEventRow = {
   sourceRaw: string;
   source: string;
   sourceType: string;
-  authIndex: string;
+  authIndex: string | null;
   failed: boolean;
   serviceTier: string;
   failStatusCode: number | null;
@@ -86,6 +86,7 @@ export interface RequestEventsDetailsCardProps {
   vertexConfigs: ProviderKeyConfig[];
   openaiProviders: OpenAIProviderConfig[];
   authFiles?: AuthFileItem[];
+  configuredCredentials: ReadonlyMap<string, ConfiguredCredential>;
   onRefresh?: () => Promise<void> | void;
   lastRefreshedAt?: Date | null;
   fixedHeight?: boolean;
@@ -200,6 +201,7 @@ export function RequestEventsDetailsCard({
   vertexConfigs,
   openaiProviders,
   authFiles,
+  configuredCredentials,
   onRefresh,
   lastRefreshedAt,
   fixedHeight = false,
@@ -251,19 +253,7 @@ export function RequestEventsDetailsCard({
     void refreshAuthFiles();
   }, [authFiles, lastRefreshedAt, refreshAuthFiles]);
 
-  const authFileMap = useMemo(() => {
-    const map = new Map<string, CredentialInfo>();
-    resolvedAuthFiles.forEach((file) => {
-      const key = normalizeAuthIndex(file['auth_index'] ?? file.authIndex);
-      if (!key) return;
-      map.set(key, {
-        name: file.name || key,
-        type: (file.type || file.provider || '').toString(),
-        statusMessage: getAuthFileStatusMessage(file),
-      });
-    });
-    return map;
-  }, [resolvedAuthFiles]);
+  const authFileLookup = useMemo(() => buildAuthFileLookup(resolvedAuthFiles), [resolvedAuthFiles]);
 
   const sourceInfoMap = useMemo(
     () =>
@@ -349,7 +339,7 @@ export function RequestEventsDetailsCard({
   const rows = useMemo<RequestEventRow[]>(() => {
     const details = collectUsageDetails(usage);
 
-    const baseRows = details.map((detail, index) => {
+    const eventRows = details.map((detail, index) => {
       const timestamp = detail.timestamp;
       const timestampMs =
         typeof detail.__timestampMs === 'number' && detail.__timestampMs > 0
@@ -357,15 +347,9 @@ export function RequestEventsDetailsCard({
           : parseTimestampMs(timestamp);
       const date = Number.isNaN(timestampMs) ? null : new Date(timestampMs);
       const sourceRaw = String(detail.source ?? '').trim();
-      const authIndexRaw = detail.auth_index as unknown;
-      const authIndex =
-        authIndexRaw === null || authIndexRaw === undefined || authIndexRaw === ''
-          ? '-'
-          : String(authIndexRaw);
-      const sourceInfo = resolveSourceDisplay(sourceRaw, authIndexRaw, sourceInfoMap, authFileMap);
-      const source = sourceInfo.displayName;
-      const sourceKey = sourceInfo.identityKey ?? `source:${sourceRaw || source}`;
-      const sourceType = sourceInfo.type;
+      const authIndex = normalizeAuthIndex(detail.auth_index);
+      const { displayName: source, identityKey: sourceKey, type: sourceType } =
+        resolveSourceDisplay(detail, sourceInfoMap, authFileLookup, configuredCredentials);
       const model = String(detail.__modelName ?? '').trim() || '-';
       const inputTokens = Math.max(toNumber(detail.tokens?.input_tokens), 0);
       const outputTokens = Math.max(toNumber(detail.tokens?.output_tokens), 0);
@@ -402,7 +386,7 @@ export function RequestEventsDetailsCard({
         typeof detail.failure_body === 'string' ? decodeHtmlEntities(detail.failure_body) : '';
 
       return {
-        id: backendId ?? `${timestamp}-${model}-${sourceKey}-${authIndex}-${index}`,
+        id: backendId ?? `${timestamp}-${model}-${sourceKey}-${authIndex ?? '-'}-${index}`,
         backendId,
         timestamp,
         timestampMs: Number.isNaN(timestampMs) ? 0 : timestampMs,
@@ -410,7 +394,7 @@ export function RequestEventsDetailsCard({
         model,
         responseModel: detail.response_model ?? '',
         sourceKey,
-        sourceRaw: sourceRaw || '-',
+        sourceRaw,
         source,
         sourceType,
         authIndex,
@@ -433,41 +417,8 @@ export function RequestEventsDetailsCard({
       };
     });
 
-    const sourceLabelKeyMap = new Map<string, Set<string>>();
-    baseRows.forEach((row) => {
-      const keys = sourceLabelKeyMap.get(row.source) ?? new Set<string>();
-      keys.add(row.sourceKey);
-      sourceLabelKeyMap.set(row.source, keys);
-    });
-
-    const buildDisambiguatedSourceLabel = (row: RequestEventRow) => {
-      const labelKeyCount = sourceLabelKeyMap.get(row.source)?.size ?? 0;
-      if (labelKeyCount <= 1) {
-        return row.source;
-      }
-
-      if (row.authIndex !== '-') {
-        return `${row.source} · ${row.authIndex}`;
-      }
-
-      if (row.sourceRaw !== '-' && row.sourceRaw !== row.source) {
-        return `${row.source} · ${row.sourceRaw}`;
-      }
-
-      if (row.sourceType) {
-        return `${row.source} · ${row.sourceType}`;
-      }
-
-      return `${row.source} · ${row.sourceKey}`;
-    };
-
-    return baseRows
-      .map((row) => ({
-        ...row,
-        source: buildDisambiguatedSourceLabel(row),
-      }))
-      .sort((a, b) => b.timestampMs - a.timestampMs);
-  }, [authFileMap, i18n.language, sourceInfoMap, usage]);
+    return eventRows.sort((a, b) => b.timestampMs - a.timestampMs);
+  }, [authFileLookup, configuredCredentials, i18n.language, sourceInfoMap, usage]);
 
   const hasTimingData = useMemo(
     () => rows.some((row) => row.firstByteLatencyMs !== null || row.generationMs !== null),
@@ -506,19 +457,28 @@ export function RequestEventsDetailsCard({
   );
 
   const sourceOptions = useMemo(() => {
-    const optionMap = new Map<string, string>();
-    rows.forEach((row) => {
-      if (!optionMap.has(row.sourceKey)) {
-        optionMap.set(row.sourceKey, row.source);
+    const firstRowBySourceKey = new Map<string, RequestEventRow>();
+    for (const row of rows) {
+      if (!firstRowBySourceKey.has(row.sourceKey)) {
+        firstRowBySourceKey.set(row.sourceKey, row);
       }
-    });
+    }
+
+    const nameCounts = new Map<string, number>();
+    for (const { source } of firstRowBySourceKey.values()) {
+      nameCounts.set(source, (nameCounts.get(source) ?? 0) + 1);
+    }
 
     return [
       { value: ALL_FILTER, label: t('usage_stats.filter_all') },
-      ...Array.from(optionMap.entries()).map(([value, label]) => ({
-        value,
-        label,
-      })),
+      ...Array.from(firstRowBySourceKey.values(), (row) => {
+        const originalSource = row.sourceRaw === row.source ? '' : row.sourceRaw;
+        const qualifier = row.authIndex || originalSource || row.sourceType || row.sourceKey;
+        const label = (nameCounts.get(row.source) ?? 0) > 1
+          ? `${row.source} · ${qualifier}`
+          : row.source;
+        return { value: row.sourceKey, label };
+      }),
     ];
   }, [rows, t]);
 
@@ -617,12 +577,9 @@ export function RequestEventsDetailsCard({
     setSelectedFailureRow(null);
   }, []);
 
-  const selectedCredentialInfo = useMemo(() => {
-    if (!selectedFailureRow) return null;
-    const normalizedAuthIndex = normalizeAuthIndex(selectedFailureRow.authIndex);
-    if (!normalizedAuthIndex) return null;
-    return authFileMap.get(normalizedAuthIndex) ?? null;
-  }, [authFileMap, selectedFailureRow]);
+  const selectedFailureSource = selectedFailureRow
+    ? rows.find((row) => row.id === selectedFailureRow.id)?.source ?? selectedFailureRow.source
+    : '-';
 
   return (
     <Card
@@ -945,13 +902,13 @@ export function RequestEventsDetailsCard({
               </div>
             </div>
 
-            {selectedCredentialInfo?.name && (
+            {selectedFailureSource !== '-' && (
               <div className={styles.requestEventsFailureCredentialRow}>
                 <span className={styles.requestEventsFailureMetaLabel}>
                   {t('usage_stats.request_events_failure_log_credential')}
                 </span>
                 <span className={styles.requestEventsFailureMetaValue}>
-                  {selectedCredentialInfo.name}
+                  {selectedFailureSource}
                 </span>
               </div>
             )}

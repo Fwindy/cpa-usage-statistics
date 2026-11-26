@@ -47,7 +47,7 @@ interface CredentialUsageInput {
   configuredCredentials?: ReadonlyMap<string, ConfiguredCredential>;
 }
 
-interface AuthFileLookup {
+export interface AuthFileLookup {
   authIndexToFile: Map<string, AuthFileItem>;
   authFileNameToFile: Map<string, AuthFileItem>;
 }
@@ -72,7 +72,7 @@ export const normalizeCredentialType = (file?: AuthFileItem) => {
 
 export const getCredentialRowKeyForFile = (file: AuthFileItem): string => `file:${file.name}`;
 
-const buildAuthFileLookup = (authFiles: AuthFileItem[]): AuthFileLookup => {
+export const buildAuthFileLookup = (authFiles: AuthFileItem[]): AuthFileLookup => {
   const authIndexToFile = new Map<string, AuthFileItem>();
   const authFileNameToFile = new Map<string, AuthFileItem>();
 
@@ -89,7 +89,7 @@ const buildAuthFileLookup = (authFiles: AuthFileItem[]): AuthFileLookup => {
   return { authIndexToFile, authFileNameToFile };
 };
 
-const resolveCredentialMatch = (
+export const resolveCredentialMatch = (
   detail: UsageDetail,
   lookup: AuthFileLookup,
   configuredCredentials?: ReadonlyMap<string, ConfiguredCredential>
